@@ -1,0 +1,152 @@
+//Server Code (with User Authentication and Message Persistence)
+import socket
+import threading
+import sqlite3
+from cryptography.fernet import Fernet
+
+# Global constants
+HOST = '127.0.0.1'
+PORT = 12345
+clients = []
+client_usernames = {}
+cipher = Fernet(Fernet.generate_key())
+
+# Database setup
+conn = sqlite3.connect('chat.db', check_same_thread=False)
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS messages (username TEXT, message TEXT)''')
+conn.commit()
+
+def broadcast(message, sender_socket):
+    for client in clients:
+        if client != sender_socket:
+            client.send(message)
+
+def handle_client(client_socket):
+    while True:
+        try:
+            message = client_socket.recv(1024)
+            decrypted_message = cipher.decrypt(message).decode()
+            username, msg = decrypted_message.split(': ', 1)
+            c.execute("INSERT INTO messages (username, message) VALUES (?, ?)", (username, msg))
+            conn.commit()
+            broadcast(message, client_socket)
+        except:
+            clients.remove(client_socket)
+            username = client_usernames[client_socket]
+            del client_usernames[client_socket]
+            client_socket.close()
+            broadcast(f"{username} has left the chat.".encode(), client_socket)
+            break
+
+def handle_auth(client_socket):
+    while True:
+        try:
+            auth_data = client_socket.recv(1024).decode()
+            auth_type, username, password = auth_data.split(':')
+            if auth_type == "register":
+                c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+                conn.commit()
+                client_socket.send("Registration successful.".encode())
+            elif auth_type == "login":
+                c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+                if c.fetchone():
+                    client_usernames[client_socket] = username
+                    client_socket.send("Login successful.".encode())
+                    clients.append(client_socket)
+                    broadcast(f"{username} has joined the chat.".encode(), client_socket)
+                    threading.Thread(target=handle_client, args=(client_socket,)).start()
+                    break
+                else:
+                    client_socket.send("Login failed.".encode())
+        except:
+            client_socket.close()
+            break
+
+def main():
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((HOST, PORT))
+    server.listen(5)
+    print(f"Server started on {HOST}:{PORT}")
+
+    while True:
+        client_socket, client_address = server.accept()
+        print(f"Connection from {client_address}")
+        threading.Thread(target=handle_auth, args=(client_socket,)).start()
+
+if __name__ == "__main__":
+    main()
+// client code
+import tkinter as tk
+from tkinter import scrolledtext, simpledialog
+import socket
+import threading
+from cryptography.fernet import Fernet
+
+HOST = '127.0.0.1'
+PORT = 12345
+cipher = Fernet(Fernet.generate_key())
+
+class ChatClient:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Chat Application")
+
+        self.chat_area = scrolledtext.ScrolledText(root)
+        self.chat_area.pack(pady=10)
+        self.chat_area.config(state='disabled')
+
+        self.message_entry = tk.Entry(root, width=50)
+        self.message_entry.pack(side=tk.LEFT, padx=10)
+        
+        self.send_button = tk.Button(root, text="Send", command=self.send_message)
+        self.send_button.pack(side=tk.LEFT)
+
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.connect((HOST, PORT))
+
+        self.username = simpledialog.askstring("Username", "Enter your username:")
+        self.password = simpledialog.askstring("Password", "Enter your password:", show='*')
+        
+        self.register_or_login()
+
+        thread = threading.Thread(target=self.receive_messages)
+        thread.start()
+
+    def register_or_login(self):
+        action = simpledialog.askstring("Action", "Do you want to register or login?", initialvalue='login')
+        self.client_socket.send(f"{action}:{self.username}:{self.password}".encode())
+        response = self.client_socket.recv(1024).decode()
+        if response == "Registration successful." or response == "Login successful.":
+            self.chat_area.config(state='normal')
+            self.chat_area.insert(tk.END, response + "\n")
+            self.chat_area.config(state='disabled')
+        else:
+            self.root.destroy()
+
+    def send_message(self):
+        message = self.message_entry.get()
+        encrypted_message = cipher.encrypt(f"{self.username}: {message}".encode())
+        self.client_socket.send(encrypted_message)
+        self.message_entry.delete(0, tk.END)
+
+    def receive_messages(self):
+        while True:
+            try:
+                encrypted_message = self.client_socket.recv(1024)
+                decrypted_message = cipher.decrypt(encrypted_message).decode()
+                self.chat_area.config(state='normal')
+                self.chat_area.insert(tk.END, decrypted_message + "\n")
+                self.chat_area.config(state='disabled')
+            except:
+                self.client_socket.close()
+                break
+
+def main():
+    root = tk.Tk()
+    client = ChatClient(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
