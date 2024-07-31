@@ -1,0 +1,97 @@
+import random
+
+# Define the quiz questions, options, and correct answers
+quiz_questions = [
+    {
+        "question": "What is the capital of France?",
+        "options": ["A. Berlin", "B. Madrid", "C. Paris", "D. Rome"],
+        "answer": "C"
+    },
+    {
+        "question": "What is the smallest prime number?",
+        "options": ["A. 0", "B. 1", "C. 2", "D. 3"],
+        "answer": "C"
+    },
+    {
+        "question": "What is the chemical symbol for water?",
+        "options": ["A. H2O", "B. O2", "C. CO2", "D. HO"],
+        "answer": "A"
+    },
+    {
+        "question": "In which year did the Titanic sink?",
+        "options": ["A. 1910", "B. 1912", "C. 1914", "D. 1916"],
+        "answer": "B"
+    },
+    {
+        "question": "What is the largest planet in our solar system?",
+        "options": ["A. Earth", "B. Mars", "C. Jupiter", "D. Saturn"],
+        "answer": "C"
+    }
+]
+
+def display_welcome_message():
+    print("Welcome to the Quiz Game!")
+    print("You will be asked a series of questions.")
+    print("Please select the correct answer from the given options.")
+    print("Let's begin!\n")
+
+def display_question(question):
+    print(question["question"])
+    for option in question["options"]:
+        print(option)
+    answer = input("Please enter your answer (A, B, C, or D): ").upper()
+    return answer
+
+def evaluate_answer(user_answer, correct_answer):
+    return user_answer == correct_answer
+
+def display_feedback(is_correct, correct_answer):
+    if is_correct:
+        print("Correct!\n")
+    else:
+        print(f"Incorrect. The correct answer was {correct_answer}.\n")
+
+def calculate_final_score(score, total_questions):
+    return (score / total_questions) * 100
+
+def display_final_results(score, total_questions):
+    print("Quiz Over!")
+    print(f"Your final score is: {score}/{total_questions}")
+    percentage = calculate_final_score(score, total_questions)
+    print(f"Percentage: {percentage}%")
+
+    if percentage == 100:
+        print("Perfect score! Well done!")
+    elif percentage >= 75:
+        print("Great job! You did very well.")
+    elif percentage >= 50:
+        print("Good effort! You can do better next time.")
+    else:
+        print("Keep trying! Practice makes perfect.")
+
+def play_quiz():
+    score = 0
+    total_questions = len(quiz_questions)
+    random.shuffle(quiz_questions)
+
+    display_welcome_message()
+    
+    for question in quiz_questions:
+        user_answer = display_question(question)
+        is_correct = evaluate_answer(user_answer, question["answer"])
+        if is_correct:
+            score += 1
+        display_feedback(is_correct, question["answer"])
+
+    display_final_results(score, total_questions)
+
+def main():
+    while True:
+        play_quiz()
+        play_again = input("Do you want to play again? (yes or no): ").lower()
+        if play_again != "yes":
+            print("Thank you for playing! Goodbye!")
+            break
+
+if __name__ == "__main__":
+    main()
